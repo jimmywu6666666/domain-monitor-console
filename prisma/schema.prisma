@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Domain {
+  id                    String          @id @default(cuid())
+  name                  String          @unique
+  note                  String?
+  icpNumber             String?
+  icpStatus             String          @default("UNKNOWN")
+  expiresAt             DateTime?
+  expirationCheckEnabled Boolean        @default(true)
+  icpCheckEnabled       Boolean         @default(true)
+  expiryReminderDays    String?
+  lastExpirationCheckAt DateTime?
+  lastIcpCheckAt        DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  urls                  UrlCheck[]
+  results               MonitorResult[]
+}
+
+model UrlCheck {
+  id               String          @id @default(cuid())
+  domainId         String
+  url              String
+  method           String          @default("GET")
+  expectedStatuses String          @default("200-399")
+  timeoutMs        Int             @default(10000)
+  intervalSeconds  Int             @default(10)
+  failureThreshold Int             @default(1)
+  enabled          Boolean         @default(true)
+  consecutiveFailures Int          @default(0)
+  lastStatus       String          @default("UNKNOWN")
+  sslCheckEnabled  Boolean         @default(true)
+  sslStatus        String          @default("UNKNOWN")
+  sslExpiresAt     DateTime?
+  sslIssuer        String?
+  sslSubject       String?
+  lastCheckedAt    DateTime?
+  lastSuccessAt    DateTime?
+  lastFailureAt    DateTime?
+  lastSslCheckAt   DateTime?
+  nextCheckAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  domain           Domain          @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  results          MonitorResult[]
+}
+
+model MonitorResult {
+  id             String       @id @default(cuid())
+  type           String
+  status         String
+  responseTimeMs Int?
+  statusCode     Int?
+  error          String?
+  summary        String?
+  checkedAt      DateTime     @default(now())
+  domainId       String?
+  urlCheckId     String?
+  domain         Domain?      @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  urlCheck       UrlCheck?    @relation(fields: [urlCheckId], references: [id], onDelete: Cascade)
+}
+
+model AlertEvent {
+  id              String      @id @default(cuid())
+  type            String
+  dedupeKey       String
+  status          String      @default("PENDING")
+  message         String
+  target          String?
+  cooldownUntil   DateTime?
+  cooldownMinutes Int?
+  repeatCount     Int         @default(0)
+  telegramResult  String?
+  error           String?
+  createdAt       DateTime    @default(now())
+  sentAt          DateTime?
+
+  @@index([dedupeKey, createdAt])
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
