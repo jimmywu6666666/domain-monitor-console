@@ -56,18 +56,24 @@ export async function sendTelegram(settings: AppSettings, message: string) {
 
   const results = await Promise.all(
     chatIds.map(async (chatId) => {
-      const response = await fetch(`https://api.telegram.org/bot${settings.telegramBotToken}/sendMessage`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: message,
-          parse_mode: "HTML",
-          disable_web_page_preview: true
-        })
-      });
-      const text = await response.text();
-      return { chatId, ok: response.ok, result: text, error: response.ok ? undefined : text };
+      try {
+        const response = await fetch(`https://api.telegram.org/bot${settings.telegramBotToken}/sendMessage`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+            reply_markup: monitorKeyboard
+          })
+        });
+        const text = await response.text();
+        return { chatId, ok: response.ok, result: text, error: response.ok ? undefined : text };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { chatId, ok: false, result: "", error: message };
+      }
     })
   );
   const failed = results.filter((result) => !result.ok);
