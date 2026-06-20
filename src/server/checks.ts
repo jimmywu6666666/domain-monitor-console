@@ -162,18 +162,16 @@ export async function runSslCheck(id: string) {
       }
     });
 
-    if (status !== "OK" || previousStatus === "ERROR") {
-      await prisma.monitorResult.create({
-        data: {
-          type: "SSL",
-          status,
-          summary: expiresAt ? `证书剩余 ${daysLeft} 天` : "无法读取证书到期时间",
-          error: status === "ERROR" && expiresAt ? "证书已过期" : null,
-          domainId: check.domainId,
-          urlCheckId: check.id
-        }
-      });
-    }
+    await prisma.monitorResult.create({
+      data: {
+        type: "SSL",
+        status,
+        summary: expiresAt ? `证书剩余 ${daysLeft} 天` : "无法读取证书到期时间",
+        error: status === "ERROR" && expiresAt ? "证书已过期" : null,
+        domainId: check.domainId,
+        urlCheckId: check.id
+      }
+    });
 
     if (status === "WARNING" && matchedDay) {
       await createAlert({
@@ -248,16 +246,14 @@ export async function runExpirationCheck(domainId: string) {
     where: { id: domain.id },
     data: { expiresAt, lastExpirationCheckAt: new Date() }
   });
-  if (!expiresAt || status !== "OK") {
-    await prisma.monitorResult.create({
-      data: {
-        type: "EXPIRATION",
-        status: expiresAt ? status : "ERROR",
-        summary: expiresAt ? `剩余 ${daysLeft} 天` : "无法获取到期时间",
-        domainId: domain.id
-      }
-    });
-  }
+  await prisma.monitorResult.create({
+    data: {
+      type: "EXPIRATION",
+      status: expiresAt ? status : "ERROR",
+      summary: expiresAt ? `剩余 ${daysLeft} 天` : "无法获取到期时间",
+      domainId: domain.id
+    }
+  });
 
   if (expiresAt && daysLeft !== null) {
     const matchedDay = reminderDays.find((day) => daysLeft <= day);
@@ -294,17 +290,15 @@ export async function runIcpCheck(domainId: string) {
       lastIcpCheckAt: new Date()
     }
   });
-  if (nextStatus !== "ACTIVE") {
-    await prisma.monitorResult.create({
-      data: {
-        type: "ICP",
-        status: nextStatus === "ERROR" ? "ERROR" : "FAIL",
-        summary: result.summary,
-        error: result.error,
-        domainId: domain.id
-      }
-    });
-  }
+  await prisma.monitorResult.create({
+    data: {
+      type: "ICP",
+      status: nextStatus === "ACTIVE" ? "OK" : nextStatus === "ERROR" ? "ERROR" : "FAIL",
+      summary: result.summary,
+      error: result.error,
+      domainId: domain.id
+    }
+  });
 
   if (nextStatus === "DROPPED" || nextStatus === "MISSING") {
     await createAlert({
