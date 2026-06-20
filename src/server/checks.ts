@@ -55,7 +55,7 @@ export async function runUrlCheck(id: string) {
     const result = await probeUrl(check.url, check.method, check.timeoutMs, check.expectedStatuses, attempt);
     attempts.push(result);
     if (result.ok) break;
-    if (attempt < 3) await delay(5000);
+    if (attempt < 3) await delay(10000);
   }
 
   const finalResult = attempts[attempts.length - 1];
@@ -109,7 +109,7 @@ export async function runUrlCheck(id: string) {
       target: check.url,
       cooldownMinutes: settings.alertCooldownMinutes,
       settings,
-      message: `🔴 URL 不可用\n域名：${check.domain.name}\n地址：${check.url}\n结果：连续 ${attempts.length} 次探测失败（间隔 5 秒）\n最后错误：${finalResult.error ?? finalResult.statusCode ?? "未知"}`
+      message: `🔴 URL 不可用\n域名：${check.domain.name}\n地址：${check.url}\n结果：连续 ${attempts.length} 次探测失败（间隔 10 秒）\n最后错误：${finalResult.error ?? finalResult.statusCode ?? "未知"}`
     });
   } else if (ok && wasDown) {
     await resetAlertBackoff(`url-down:${check.id}`);
