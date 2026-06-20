@@ -616,7 +616,11 @@ function SettingsPanel({ settings, onRefresh }: { settings: SettingsState; onRef
 }
 
 function ResultTable({ rows }: { rows: any[] }) {
-  return <DataTable rows={rows} columns={["type", "status", "summary", "error", "checkedAt"]} />;
+  const withTargets = rows.map((row) => ({
+    ...row,
+    target: row.urlCheck?.url ?? row.domain?.name ?? ""
+  }));
+  return <DataTable rows={withTargets} columns={["type", "status", "target", "summary", "error", "checkedAt"]} />;
 }
 
 function AlertTable({ rows }: { rows: any[] }) {
