@@ -24,7 +24,7 @@ export const defaultSettings: AppSettings = {
   defaultTimeoutMs: 10000,
   defaultExpectedStatuses: "200-399",
   expiryReminderDays: [30, 7, 1],
-  alertCooldownMinutes: 120,
+  alertCooldownMinutes: 1,
   alertMaxCooldownMinutes: 720,
   icpGlobalEnabled: true,
   icpQueryBaseUrl: process.env.ICP_QUERY_BASE_URL ?? "http://127.0.0.1:16181"
