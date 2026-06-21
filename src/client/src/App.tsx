@@ -22,6 +22,7 @@ type UrlCheck = {
   url: string;
   method: "GET" | "HEAD";
   expectedStatuses: string;
+  checkLevel: "LEVEL1" | "LEVEL2";
   timeoutMs: number;
   intervalSeconds: number;
   failureThreshold: number;
@@ -251,9 +252,9 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
         method: "POST",
         body: JSON.stringify({
           url,
+          checkLevel: form.get("checkLevel"),
           intervalSeconds: Number(form.get("intervalSeconds") || settings?.defaultUrlIntervalSeconds || 10),
           failureThreshold: Number(form.get("failureThreshold") || settings?.defaultFailureThreshold || 1),
-          timeoutMs: Number(form.get("timeoutMs") || settings?.defaultTimeoutMs || 10000),
           expectedStatuses: form.get("expectedStatuses") || settings?.defaultExpectedStatuses || "200-399",
           sslCheckEnabled: form.get("sslCheckEnabled") === "on"
         })
@@ -305,7 +306,7 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
         url: form.get("url"),
         method: form.get("method"),
         expectedStatuses: form.get("expectedStatuses"),
-        timeoutMs: Number(form.get("timeoutMs")),
+        checkLevel: form.get("checkLevel"),
         intervalSeconds: Number(form.get("intervalSeconds")),
         failureThreshold: Number(form.get("failureThreshold")),
         enabled: form.get("enabled") === "on",
@@ -326,7 +327,7 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
         url: form.get("url"),
         method: form.get("method"),
         expectedStatuses: form.get("expectedStatuses"),
-        timeoutMs: Number(form.get("timeoutMs")),
+        checkLevel: form.get("checkLevel"),
         intervalSeconds: Number(form.get("intervalSeconds")),
         failureThreshold: Number(form.get("failureThreshold")),
         enabled: form.get("enabled") === "on",
@@ -376,7 +377,7 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
                               <button title="删除 URL" onClick={() => deleteUrl(url.id)}><Trash2 size={14} /></button>
                             </div>
                           </div>
-                          <span>{url.lastCheckedAt ? `最近检测：${formatDate(url.lastCheckedAt)}` : "尚未检测"}</span>
+                          <span>{checkLevelText(url.checkLevel)} · {url.lastCheckedAt ? `最近检测：${formatDate(url.lastCheckedAt)}` : "尚未检测"}</span>
                         </div>
                         <div className="url-health">
                           <div>
@@ -440,8 +441,13 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
             <div className="form-grid">
               <label>检测间隔（秒）<input name="intervalSeconds" type="number" min={10} defaultValue={settings?.defaultUrlIntervalSeconds ?? 10} /></label>
               <label>失败阈值<input name="failureThreshold" type="number" min={1} defaultValue={settings?.defaultFailureThreshold ?? 1} /></label>
-              <label>超时（毫秒）<input name="timeoutMs" type="number" defaultValue={settings?.defaultTimeoutMs ?? 10000} /></label>
               <label>期望状态码<input name="expectedStatuses" defaultValue={settings?.defaultExpectedStatuses ?? "200-399"} /></label>
+              <label>检测方案
+                <select name="checkLevel" defaultValue="LEVEL1">
+                  <option value="LEVEL1">一级检测（10 秒 × 3）</option>
+                  <option value="LEVEL2">二级检测（30 秒 × 3）</option>
+                </select>
+              </label>
               <label className="check-setting"><input type="checkbox" name="sslCheckEnabled" defaultChecked />开启 SSL 检测</label>
               <label className="check-setting"><input type="checkbox" name="icpCheckEnabled" defaultChecked />开启备案检测</label>
             </div>
@@ -485,9 +491,14 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
                 </select>
               </label>
               <label>期望状态码<input name="expectedStatuses" defaultValue={settings?.defaultExpectedStatuses ?? "200-399"} /></label>
+              <label>检测方案
+                <select name="checkLevel" defaultValue="LEVEL1">
+                  <option value="LEVEL1">一级检测（10 秒 × 3）</option>
+                  <option value="LEVEL2">二级检测（30 秒 × 3）</option>
+                </select>
+              </label>
               <label>检测间隔（秒）<input name="intervalSeconds" type="number" min={10} defaultValue={settings?.defaultUrlIntervalSeconds ?? 10} /></label>
               <label>失败阈值<input name="failureThreshold" type="number" min={1} max={10} defaultValue={settings?.defaultFailureThreshold ?? 1} /></label>
-              <label>超时（毫秒）<input name="timeoutMs" type="number" min={1000} max={60000} defaultValue={settings?.defaultTimeoutMs ?? 10000} /></label>
               <label className="check-setting"><input type="checkbox" name="enabled" defaultChecked />开启 URL 检测</label>
               <label className="check-setting"><input type="checkbox" name="sslCheckEnabled" defaultChecked />开启 SSL 检测</label>
             </div>
@@ -511,9 +522,14 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
                 </select>
               </label>
               <label>期望状态码<input name="expectedStatuses" defaultValue={editingUrl.expectedStatuses} /></label>
+              <label>检测方案
+                <select name="checkLevel" defaultValue={editingUrl.checkLevel ?? "LEVEL1"}>
+                  <option value="LEVEL1">一级检测（10 秒 × 3）</option>
+                  <option value="LEVEL2">二级检测（30 秒 × 3）</option>
+                </select>
+              </label>
               <label>检测间隔（秒）<input name="intervalSeconds" type="number" min={10} defaultValue={editingUrl.intervalSeconds} /></label>
               <label>失败阈值<input name="failureThreshold" type="number" min={1} max={10} defaultValue={editingUrl.failureThreshold} /></label>
-              <label>超时（毫秒）<input name="timeoutMs" type="number" min={1000} max={60000} defaultValue={editingUrl.timeoutMs} /></label>
               <label className="check-setting"><input type="checkbox" name="enabled" defaultChecked={editingUrl.enabled} />开启 URL 检测</label>
               <label className="check-setting"><input type="checkbox" name="sslCheckEnabled" defaultChecked={editingUrl.sslCheckEnabled} />开启 SSL 检测</label>
             </div>
@@ -543,7 +559,6 @@ function SettingsPanel({ settings, onRefresh }: { settings: SettingsState; onRef
         telegramChatId: form.get("telegramChatId"),
         defaultUrlIntervalSeconds: Number(form.get("defaultUrlIntervalSeconds")),
         defaultFailureThreshold: Number(form.get("defaultFailureThreshold")),
-        defaultTimeoutMs: Number(form.get("defaultTimeoutMs")),
         defaultExpectedStatuses: form.get("defaultExpectedStatuses"),
         expiryReminderDays: String(form.get("expiryReminderDays")).split(",").map(Number).filter(Boolean),
         alertCooldownMinutes: Number(form.get("alertCooldownMinutes")),
@@ -579,7 +594,6 @@ function SettingsPanel({ settings, onRefresh }: { settings: SettingsState; onRef
         <label>Telegram Chat ID（多个用逗号分隔）<input name="telegramChatId" defaultValue={settings.telegramChatId} placeholder="123456789,-100xxxxxxxxxx" /></label>
         <label>URL 默认检测间隔（秒）<input type="number" name="defaultUrlIntervalSeconds" defaultValue={settings.defaultUrlIntervalSeconds} /></label>
         <label>默认失败阈值<input type="number" name="defaultFailureThreshold" defaultValue={settings.defaultFailureThreshold} /></label>
-        <label>默认超时（毫秒）<input type="number" name="defaultTimeoutMs" defaultValue={settings.defaultTimeoutMs} /></label>
         <label>默认期望状态码<input name="defaultExpectedStatuses" defaultValue={settings.defaultExpectedStatuses} /></label>
         <label>域名到期提醒天数<input name="expiryReminderDays" defaultValue={settings.expiryReminderDays.join(",")} /></label>
         <label>基础告警间隔（分钟）<input type="number" name="alertCooldownMinutes" defaultValue={settings.alertCooldownMinutes} /></label>
@@ -667,6 +681,10 @@ function pageTitle(page: Page) {
 
 function statusText(value: string) {
   return ({ UP: "正常", DOWN: "异常", UNKNOWN: "未知", PAUSED: "暂停", ACTIVE: "已备案", MISSING: "未备案", DROPPED: "掉备", ERROR: "错误", OK: "正常", WARNING: "即将到期", FAIL: "失败" } as Record<string, string>)[value] ?? value;
+}
+
+function checkLevelText(value?: string) {
+  return value === "LEVEL2" ? "二级检测（30 秒 × 3）" : "一级检测（10 秒 × 3）";
 }
 
 function formatDate(value: string) {

@@ -28,6 +28,13 @@ type IcpQueryResult = {
   attempts?: number;
 };
 
+function getUrlCheckPlan(checkLevel: string) {
+  if (checkLevel === "LEVEL2") {
+    return { label: "二级检测", timeoutMs: 30000, retryDelayMs: 30000 };
+  }
+  return { label: "一级检测", timeoutMs: 10000, retryDelayMs: 10000 };
+}
+
 export function parseSslTarget(rawUrl: string) {
   const parsed = new URL(rawUrl);
   if (parsed.protocol !== "https:") return null;
@@ -50,12 +57,13 @@ export async function runUrlCheck(id: string) {
   const check = await prisma.urlCheck.findUnique({ where: { id }, include: { domain: true } });
   if (!check || !check.enabled) return null;
 
+  const plan = getUrlCheckPlan(check.checkLevel);
   const attempts: UrlAttemptResult[] = [];
   for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const result = await probeUrl(check.url, check.method, check.timeoutMs, check.expectedStatuses, attempt);
+    const result = await probeUrl(check.url, check.method, plan.timeoutMs, check.expectedStatuses, attempt);
     attempts.push(result);
     if (result.ok) break;
-    if (attempt < 3) await delay(10000);
+    if (attempt < 3) await delay(plan.retryDelayMs);
   }
 
   const finalResult = attempts[attempts.length - 1];
@@ -83,7 +91,7 @@ export async function runUrlCheck(id: string) {
         responseTimeMs: finalResult.responseTimeMs,
         statusCode: finalResult.statusCode,
         error: finalResult.error,
-        summary: `连续 ${attempts.length} 次探测失败${finalResult.statusCode ? `，最后状态码 ${finalResult.statusCode}` : ""}`,
+        summary: `${plan.label}连续 ${attempts.length} 次探测失败${finalResult.statusCode ? `，最后状态码 ${finalResult.statusCode}` : ""}`,
         domainId: check.domainId,
         urlCheckId: check.id
       }
@@ -109,7 +117,7 @@ export async function runUrlCheck(id: string) {
       target: check.url,
       cooldownMinutes: settings.alertCooldownMinutes,
       settings,
-      message: `🔴 URL 不可用\n域名：${check.domain.name}\n地址：${check.url}\n结果：连续 ${attempts.length} 次探测失败（间隔 10 秒）\n最后错误：${finalResult.error ?? finalResult.statusCode ?? "未知"}`
+      message: `🔴 URL 不可用\n域名：${check.domain.name}\n地址：${check.url}\n方案：${plan.label}\n结果：连续 ${attempts.length} 次探测失败（间隔 ${plan.retryDelayMs / 1000} 秒）\n最后错误：${finalResult.error ?? finalResult.statusCode ?? "未知"}`
     });
   } else if (ok && wasDown) {
     await resetAlertBackoff(`url-down:${check.id}`);

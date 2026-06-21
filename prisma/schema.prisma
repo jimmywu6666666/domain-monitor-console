@@ -31,6 +31,7 @@ model UrlCheck {
   url              String
   method           String          @default("GET")
   expectedStatuses String          @default("200-399")
+  checkLevel       String          @default("LEVEL1")
   timeoutMs        Int             @default(10000)
   intervalSeconds  Int             @default(10)
   failureThreshold Int             @default(1)

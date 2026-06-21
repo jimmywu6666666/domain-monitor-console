@@ -36,6 +36,7 @@ const urlSchema = z.object({
   url: z.string().url(),
   method: z.enum(["GET", "HEAD"]).default("GET"),
   expectedStatuses: z.string().default("200-399"),
+  checkLevel: z.enum(["LEVEL1", "LEVEL2"]).default("LEVEL1"),
   timeoutMs: z.number().int().min(1000).max(60000).default(10000),
   intervalSeconds: z.number().int().min(10).default(10),
   failureThreshold: z.number().int().min(1).max(10).default(1),
