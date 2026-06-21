@@ -253,7 +253,6 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
         body: JSON.stringify({
           url,
           checkLevel: form.get("checkLevel"),
-          intervalSeconds: Number(form.get("intervalSeconds") || settings?.defaultUrlIntervalSeconds || 10),
           failureThreshold: Number(form.get("failureThreshold") || settings?.defaultFailureThreshold || 1),
           expectedStatuses: form.get("expectedStatuses") || settings?.defaultExpectedStatuses || "200-399",
           sslCheckEnabled: form.get("sslCheckEnabled") === "on"
@@ -307,7 +306,6 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
         method: form.get("method"),
         expectedStatuses: form.get("expectedStatuses"),
         checkLevel: form.get("checkLevel"),
-        intervalSeconds: Number(form.get("intervalSeconds")),
         failureThreshold: Number(form.get("failureThreshold")),
         enabled: form.get("enabled") === "on",
         sslCheckEnabled: form.get("sslCheckEnabled") === "on"
@@ -328,7 +326,6 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
         method: form.get("method"),
         expectedStatuses: form.get("expectedStatuses"),
         checkLevel: form.get("checkLevel"),
-        intervalSeconds: Number(form.get("intervalSeconds")),
         failureThreshold: Number(form.get("failureThreshold")),
         enabled: form.get("enabled") === "on",
         sslCheckEnabled: form.get("sslCheckEnabled") === "on"
@@ -439,7 +436,6 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
             <label>首个检测 URL<input name="url" placeholder="https://example.com" /></label>
             <label>备注<input name="note" placeholder="业务系统、负责人等" /></label>
             <div className="form-grid">
-              <label>检测间隔（秒）<input name="intervalSeconds" type="number" min={10} defaultValue={settings?.defaultUrlIntervalSeconds ?? 10} /></label>
               <label>失败阈值<input name="failureThreshold" type="number" min={1} defaultValue={settings?.defaultFailureThreshold ?? 1} /></label>
               <label>期望状态码<input name="expectedStatuses" defaultValue={settings?.defaultExpectedStatuses ?? "200-399"} /></label>
               <label>检测方案
@@ -497,7 +493,6 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
                   <option value="LEVEL2">二级检测（30 秒 × 3）</option>
                 </select>
               </label>
-              <label>检测间隔（秒）<input name="intervalSeconds" type="number" min={10} defaultValue={settings?.defaultUrlIntervalSeconds ?? 10} /></label>
               <label>失败阈值<input name="failureThreshold" type="number" min={1} max={10} defaultValue={settings?.defaultFailureThreshold ?? 1} /></label>
               <label className="check-setting"><input type="checkbox" name="enabled" defaultChecked />开启 URL 检测</label>
               <label className="check-setting"><input type="checkbox" name="sslCheckEnabled" defaultChecked />开启 SSL 检测</label>
@@ -528,7 +523,6 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
                   <option value="LEVEL2">二级检测（30 秒 × 3）</option>
                 </select>
               </label>
-              <label>检测间隔（秒）<input name="intervalSeconds" type="number" min={10} defaultValue={editingUrl.intervalSeconds} /></label>
               <label>失败阈值<input name="failureThreshold" type="number" min={1} max={10} defaultValue={editingUrl.failureThreshold} /></label>
               <label className="check-setting"><input type="checkbox" name="enabled" defaultChecked={editingUrl.enabled} />开启 URL 检测</label>
               <label className="check-setting"><input type="checkbox" name="sslCheckEnabled" defaultChecked={editingUrl.sslCheckEnabled} />开启 SSL 检测</label>
@@ -557,7 +551,6 @@ function SettingsPanel({ settings, onRefresh }: { settings: SettingsState; onRef
       body: JSON.stringify({
         telegramBotToken: form.get("telegramBotToken"),
         telegramChatId: form.get("telegramChatId"),
-        defaultUrlIntervalSeconds: Number(form.get("defaultUrlIntervalSeconds")),
         defaultFailureThreshold: Number(form.get("defaultFailureThreshold")),
         defaultExpectedStatuses: form.get("defaultExpectedStatuses"),
         expiryReminderDays: String(form.get("expiryReminderDays")).split(",").map(Number).filter(Boolean),
@@ -592,7 +585,6 @@ function SettingsPanel({ settings, onRefresh }: { settings: SettingsState; onRef
       <div className="form-grid">
         <label>Telegram Bot Token<input name="telegramBotToken" defaultValue={settings.telegramBotToken} /></label>
         <label>Telegram Chat ID（多个用逗号分隔）<input name="telegramChatId" defaultValue={settings.telegramChatId} placeholder="123456789,-100xxxxxxxxxx" /></label>
-        <label>URL 默认检测间隔（秒）<input type="number" name="defaultUrlIntervalSeconds" defaultValue={settings.defaultUrlIntervalSeconds} /></label>
         <label>默认失败阈值<input type="number" name="defaultFailureThreshold" defaultValue={settings.defaultFailureThreshold} /></label>
         <label>默认期望状态码<input name="defaultExpectedStatuses" defaultValue={settings.defaultExpectedStatuses} /></label>
         <label>域名到期提醒天数<input name="expiryReminderDays" defaultValue={settings.expiryReminderDays.join(",")} /></label>
