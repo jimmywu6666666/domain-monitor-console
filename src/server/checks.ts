@@ -32,6 +32,9 @@ function getUrlCheckPlan(checkLevel: string) {
   if (checkLevel === "LEVEL2") {
     return { label: "二级检测", timeoutMs: 30000, retryDelayMs: 30000 };
   }
+  if (checkLevel === "LEVEL3") {
+    return { label: "三级检测", timeoutMs: 600000, retryDelayMs: 600000 };
+  }
   return { label: "一级检测", timeoutMs: 10000, retryDelayMs: 10000 };
 }
 

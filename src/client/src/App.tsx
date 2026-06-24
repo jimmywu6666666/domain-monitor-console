@@ -22,7 +22,7 @@ type UrlCheck = {
   url: string;
   method: "GET" | "HEAD";
   expectedStatuses: string;
-  checkLevel: "LEVEL1" | "LEVEL2";
+  checkLevel: "LEVEL1" | "LEVEL2" | "LEVEL3";
   timeoutMs: number;
   intervalSeconds: number;
   failureThreshold: number;
@@ -442,6 +442,7 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
                 <select name="checkLevel" defaultValue="LEVEL1">
                   <option value="LEVEL1">一级检测（10 秒 × 3）</option>
                   <option value="LEVEL2">二级检测（30 秒 × 3）</option>
+                  <option value="LEVEL3">三级检测（10 分钟 × 3）</option>
                 </select>
               </label>
               <label className="check-setting"><input type="checkbox" name="sslCheckEnabled" defaultChecked />开启 SSL 检测</label>
@@ -491,6 +492,7 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
                 <select name="checkLevel" defaultValue="LEVEL1">
                   <option value="LEVEL1">一级检测（10 秒 × 3）</option>
                   <option value="LEVEL2">二级检测（30 秒 × 3）</option>
+                  <option value="LEVEL3">三级检测（10 分钟 × 3）</option>
                 </select>
               </label>
               <label>失败阈值<input name="failureThreshold" type="number" min={1} max={10} defaultValue={settings?.defaultFailureThreshold ?? 1} /></label>
@@ -521,6 +523,7 @@ function DomainManager({ domains, settings, onRefresh }: { domains: Domain[]; se
                 <select name="checkLevel" defaultValue={editingUrl.checkLevel ?? "LEVEL1"}>
                   <option value="LEVEL1">一级检测（10 秒 × 3）</option>
                   <option value="LEVEL2">二级检测（30 秒 × 3）</option>
+                  <option value="LEVEL3">三级检测（10 分钟 × 3）</option>
                 </select>
               </label>
               <label>失败阈值<input name="failureThreshold" type="number" min={1} max={10} defaultValue={editingUrl.failureThreshold} /></label>
@@ -676,6 +679,7 @@ function statusText(value: string) {
 }
 
 function checkLevelText(value?: string) {
+  if (value === "LEVEL3") return "三级检测（10 分钟 × 3）";
   return value === "LEVEL2" ? "二级检测（30 秒 × 3）" : "一级检测（10 秒 × 3）";
 }
 
