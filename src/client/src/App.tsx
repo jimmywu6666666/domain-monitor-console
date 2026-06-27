@@ -199,8 +199,9 @@ function Console({ page, setPage, onLogout }: { page: Page; setPage: (page: Page
   );
 }
 
-function Dashboard({ summary, domains }: { summary: any; domains: Domain[] }) {
-  const flatUrls = domains.flatMap((domain) => domain.urls.map((url) => ({ ...url, domainName: domain.name })));
+function Dashboard({ summary }: { summary: any; domains: Domain[] }) {
+  const recentResults = summary?.recentResults ?? [];
+  const recentAlerts = summary?.recentAlerts ?? [];
   return (
     <div className="stack">
       <div className="metric-grid">
@@ -211,19 +212,38 @@ function Dashboard({ summary, domains }: { summary: any; domains: Domain[] }) {
         <Metric label="SSL 异常/即将到期" value={summary?.sslIssues ?? 0} tone="orange" />
         <Metric label="备案异常" value={summary?.icpIssues ?? 0} tone="yellow" />
       </div>
-      <section className="panel">
-        <h2>重点状态</h2>
-        <div className="status-list">
-          {flatUrls.slice(0, 8).map((url) => (
-            <div className="status-row" key={url.id}>
-              <StatusPill value={url.enabled ? url.lastStatus : "PAUSED"} />
-              <div><strong>{url.domainName}</strong><span>{url.url}</span></div>
-              <span>{url.lastCheckedAt ? formatDate(url.lastCheckedAt) : "未检测"}</span>
-            </div>
-          ))}
-          {!flatUrls.length && <Empty text="还没有添加监控网址" />}
-        </div>
-      </section>
+      <div className="history-grid">
+        <section className="panel">
+          <h2>最近检测历史</h2>
+          <div className="history-list">
+            {recentResults.map((row: any) => (
+              <HistoryRow
+                key={row.id}
+                status={row.status}
+                title={`${row.type} · ${row.urlCheck?.url ?? row.domain?.name ?? "未知对象"}`}
+                detail={row.summary ?? row.error ?? ""}
+                time={row.checkedAt}
+              />
+            ))}
+            {!recentResults.length && <Empty text="暂无检测历史" />}
+          </div>
+        </section>
+        <section className="panel">
+          <h2>最近告警历史</h2>
+          <div className="history-list">
+            {recentAlerts.map((row: any) => (
+              <HistoryRow
+                key={row.id}
+                status={row.status}
+                title={`${row.type} · ${row.target ?? "未指定对象"}`}
+                detail={row.error || row.message}
+                time={row.createdAt}
+              />
+            ))}
+            {!recentAlerts.length && <Empty text="暂无告警历史" />}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -634,6 +654,19 @@ function ResultTable({ rows }: { rows: any[] }) {
 
 function AlertTable({ rows }: { rows: any[] }) {
   return <DataTable rows={rows} columns={["type", "status", "target", "message", "createdAt"]} />;
+}
+
+function HistoryRow({ status, title, detail, time }: { status: string; title: string; detail: string; time: string }) {
+  return (
+    <div className="history-row">
+      <StatusPill value={status} />
+      <div>
+        <strong>{title}</strong>
+        <span>{detail}</span>
+      </div>
+      <time>{time ? formatDate(time) : ""}</time>
+    </div>
+  );
 }
 
 function DataTable({ rows, columns }: { rows: any[]; columns: string[] }) {

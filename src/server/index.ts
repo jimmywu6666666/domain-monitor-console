@@ -50,7 +50,7 @@ const icpTestSchema = z.object({
 
 app.get("/api/summary", async () => {
   const settings = await getSettings();
-  const [domains, urls, activeAlerts, recentResults] = await Promise.all([
+  const [domains, urls, activeAlerts, recentResults, recentAlerts] = await Promise.all([
     prisma.domain.count(),
     prisma.urlCheck.count(),
     prisma.alertEvent.count({ where: { status: { in: ["SENT", "FAILED"] }, createdAt: { gte: new Date(Date.now() - 86_400_000) } } }),
@@ -59,6 +59,11 @@ app.get("/api/summary", async () => {
       orderBy: { checkedAt: "desc" },
       take: 12,
       include: { domain: true, urlCheck: true }
+    }),
+    prisma.alertEvent.findMany({
+      where: { createdAt: { gte: new Date(Date.now() - 86_400_000) } },
+      orderBy: { createdAt: "desc" },
+      take: 8
     })
   ]);
   const downUrls = await prisma.urlCheck.count({ where: { lastStatus: "DOWN" } });
@@ -69,7 +74,7 @@ app.get("/api/summary", async () => {
   const icpIssues = settings.icpGlobalEnabled
     ? await prisma.domain.count({ where: { icpCheckEnabled: true, icpStatus: { in: ["MISSING", "DROPPED", "ERROR"] } } })
     : 0;
-  return { domains, urls, downUrls, expiringDomains, sslIssues, icpIssues, activeAlerts, recentResults };
+  return { domains, urls, downUrls, expiringDomains, sslIssues, icpIssues, activeAlerts, recentResults, recentAlerts };
 });
 
 app.get("/api/domains", async () => {
