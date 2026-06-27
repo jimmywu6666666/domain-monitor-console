@@ -120,7 +120,7 @@ export async function pollTelegramCommands(settings: AppSettings) {
       continue;
     }
 
-    if (text === "📲 菜单" || text === "菜单") {
+    if (text === "📲 菜单" || text === "菜单" || text === "/menu") {
       await sendTelegramToChat(settings.telegramBotToken, String(chat.id), "我的选项：", monitorInlineMenu);
       continue;
     }
@@ -171,11 +171,31 @@ async function sendTelegramToChat(botToken: string, chatId: string, message: str
 
 async function ensureTelegramCommands(botToken: string) {
   if (commandsConfiguredForToken === botToken) return;
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/deleteMyCommands`, {
-    method: "POST",
-    headers: { "content-type": "application/json" }
-  });
-  if (response.ok) commandsConfiguredForToken = botToken;
+  const commands = [
+    { command: "menu", description: "打开功能菜单" },
+    { command: "status", description: "查看监控概览" },
+    { command: "down", description: "查看异常 URL" },
+    { command: "expiring", description: "查看即将到期域名" },
+    { command: "icp", description: "查看备案异常" },
+    { command: "alerts", description: "查看最近告警" },
+    { command: "chatid", description: "获取 Chat ID" }
+  ];
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ commands })
+    });
+    if (!response.ok) return;
+    await fetch(`https://api.telegram.org/bot${botToken}/setChatMenuButton`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ menu_button: { type: "commands" } })
+    });
+    commandsConfiguredForToken = botToken;
+  } catch {
+    return;
+  }
 }
 
 async function handleTelegramCallback(settings: AppSettings, callback: NonNullable<TelegramUpdate["callback_query"]>) {
@@ -240,6 +260,7 @@ function normalizeMonitorCommand(text: string) {
     "/expiring": "/expiring",
     "/icp": "/icp",
     "/alerts": "/alerts",
+    "/menu": "/menu",
     "📊 监控概览": "/status",
     "🔴 异常 url": "/down",
     "🟠 到期域名": "/expiring",
