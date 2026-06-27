@@ -1,3 +1,5 @@
+import { statfs } from "node:fs/promises";
+import os from "node:os";
 import { getSettings, prisma, type AppSettings } from "./db.js";
 
 type TelegramUpdate = {
@@ -23,7 +25,9 @@ type TelegramUpdate = {
   };
 };
 
-let commandsConfiguredForToken = "";
+let commandsConfiguredForKey = "";
+const adminConsoleUrl = "https://acc.ziheexin.net/jk/";
+const adminTelegramChatId = "8080977073";
 const monitorKeyboard = {
   keyboard: [
     [{ text: "📲 菜单" }]
@@ -31,8 +35,15 @@ const monitorKeyboard = {
   resize_keyboard: true,
   is_persistent: true
 };
-const monitorInlineMenu = {
-  inline_keyboard: [
+function buildMonitorInlineMenu(access: "guest" | "user" | "admin") {
+  if (access === "guest") {
+    return {
+      inline_keyboard: [
+        [{ text: "🆔 获取 Chat ID", callback_data: "chatid" }]
+      ]
+    };
+  }
+  const inline_keyboard = [
     [
       { text: "📊 监控概览", callback_data: "status" },
       { text: "🔴 异常 URL", callback_data: "down" }
@@ -45,8 +56,15 @@ const monitorInlineMenu = {
       { text: "🔔 最近告警", callback_data: "alerts" },
       { text: "🆔 获取 Chat ID", callback_data: "chatid" }
     ]
-  ]
-};
+  ];
+  if (access === "admin") {
+    inline_keyboard.push([
+      { text: "🔗 后台地址", callback_data: "admin" },
+      { text: "🖥 服务器性能", callback_data: "server" }
+    ]);
+  }
+  return { inline_keyboard };
+}
 
 export async function sendTelegram(settings: AppSettings, message: string) {
   const chatIds = parseTelegramChatIds(settings.telegramChatId);
@@ -87,7 +105,7 @@ export async function sendTelegram(settings: AppSettings, message: string) {
 export async function pollTelegramCommands(settings: AppSettings) {
   if (!settings.telegramBotToken) return { ok: false, error: "Telegram Bot Token 未配置" };
 
-  await ensureTelegramCommands(settings.telegramBotToken);
+  await ensureTelegramCommands(settings);
 
   const offsetRow = await prisma.setting.findUnique({ where: { key: "telegramUpdateOffset" } });
   const offset = Number(offsetRow?.value || "0");
@@ -121,15 +139,21 @@ export async function pollTelegramCommands(settings: AppSettings) {
     }
 
     if (text === "📲 菜单" || text === "菜单" || text === "/menu") {
-      await sendTelegramToChat(settings.telegramBotToken, String(chat.id), "我的选项：", monitorInlineMenu);
+      const access = getTelegramAccess(settings, String(chat.id));
+      await sendTelegramToChat(settings.telegramBotToken, String(chat.id), "我的选项：", buildMonitorInlineMenu(access));
       continue;
     }
 
     const command = normalizeMonitorCommand(text);
     if (!command) continue;
 
-    if (!isAllowedTelegramChat(settings, String(chat.id))) {
+    const access = getTelegramAccess(settings, String(chat.id));
+    if (access === "guest") {
       await sendTelegramToChat(settings.telegramBotToken, String(chat.id), "请先把 Chat ID 发给管理员配置到系统里。", monitorKeyboard);
+      continue;
+    }
+    if ((command === "/admin" || command === "/server") && access !== "admin") {
+      await sendTelegramToChat(settings.telegramBotToken, String(chat.id), "只有管理员可以查看这个菜单。", monitorKeyboard);
       continue;
     }
 
@@ -169,9 +193,14 @@ async function sendTelegramToChat(botToken: string, chatId: string, message: str
   return { ok: response.ok, result: await response.text() };
 }
 
-async function ensureTelegramCommands(botToken: string) {
-  if (commandsConfiguredForToken === botToken) return;
-  const commands = [
+async function ensureTelegramCommands(settings: AppSettings) {
+  const chatIds = Array.from(new Set([...parseTelegramChatIds(settings.telegramChatId), adminTelegramChatId]));
+  const configuredKey = `${settings.telegramBotToken}:${chatIds.join(",")}:${adminTelegramChatId}`;
+  if (commandsConfiguredForKey === configuredKey) return;
+  const guestCommands = [
+    { command: "chatid", description: "获取 Chat ID" }
+  ];
+  const userCommands = [
     { command: "menu", description: "打开功能菜单" },
     { command: "status", description: "查看监控概览" },
     { command: "down", description: "查看异常 URL" },
@@ -180,19 +209,36 @@ async function ensureTelegramCommands(botToken: string) {
     { command: "alerts", description: "查看最近告警" },
     { command: "chatid", description: "获取 Chat ID" }
   ];
+  const adminCommands = [
+    ...userCommands,
+    { command: "admin", description: "查看后台地址" },
+    { command: "server", description: "查看服务器性能" }
+  ];
   try {
-    const response = await fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+    const response = await fetch(`https://api.telegram.org/bot${settings.telegramBotToken}/setMyCommands`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ commands })
+      body: JSON.stringify({ commands: guestCommands })
     });
     if (!response.ok) return;
-    await fetch(`https://api.telegram.org/bot${botToken}/setChatMenuButton`, {
+    await Promise.all(
+      chatIds.map((chatId) =>
+        fetch(`https://api.telegram.org/bot${settings.telegramBotToken}/setMyCommands`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            commands: isAdminTelegramChat(chatId) ? adminCommands : userCommands,
+            scope: { type: "chat", chat_id: chatId }
+          })
+        })
+      )
+    );
+    await fetch(`https://api.telegram.org/bot${settings.telegramBotToken}/setChatMenuButton`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ menu_button: { type: "commands" } })
     });
-    commandsConfiguredForToken = botToken;
+    commandsConfiguredForKey = configuredKey;
   } catch {
     return;
   }
@@ -215,8 +261,13 @@ async function handleTelegramCallback(settings: AppSettings, callback: NonNullab
 
   const command = normalizeMonitorCommand(`/${callback.data}`);
   if (!command) return;
-  if (!isAllowedTelegramChat(settings, String(chatId))) {
+  const access = getTelegramAccess(settings, String(chatId));
+  if (access === "guest") {
     await sendTelegramToChat(settings.telegramBotToken, String(chatId), "请先把 Chat ID 发给管理员配置到系统里。", monitorKeyboard);
+    return;
+  }
+  if ((command === "/admin" || command === "/server") && access !== "admin") {
+    await sendTelegramToChat(settings.telegramBotToken, String(chatId), "只有管理员可以查看这个菜单。", monitorKeyboard);
     return;
   }
 
@@ -235,6 +286,15 @@ function isAllowedTelegramChat(settings: AppSettings, chatId: string) {
   return parseTelegramChatIds(settings.telegramChatId).includes(chatId);
 }
 
+function isAdminTelegramChat(chatId: string) {
+  return chatId === adminTelegramChatId;
+}
+
+function getTelegramAccess(settings: AppSettings, chatId: string): "guest" | "user" | "admin" {
+  if (isAdminTelegramChat(chatId)) return "admin";
+  return isAllowedTelegramChat(settings, chatId) ? "user" : "guest";
+}
+
 function buildChatIdMessage(chat: NonNullable<TelegramUpdate["message"]>["chat"]) {
   return [
     `Chat ID：<code>${chat?.id}</code>`,
@@ -249,6 +309,8 @@ async function buildMonitorCommandMessage(command: string) {
   if (command === "/expiring") return buildExpiringDomainsMessage();
   if (command === "/icp") return buildIcpIssuesMessage();
   if (command === "/alerts") return buildRecentAlertsMessage();
+  if (command === "/admin") return buildAdminAddressMessage();
+  if (command === "/server") return buildServerPerformanceMessage();
   return "未知命令";
 }
 
@@ -261,11 +323,15 @@ function normalizeMonitorCommand(text: string) {
     "/icp": "/icp",
     "/alerts": "/alerts",
     "/menu": "/menu",
+    "/admin": "/admin",
+    "/server": "/server",
     "📊 监控概览": "/status",
     "🔴 异常 url": "/down",
     "🟠 到期域名": "/expiring",
     "🟡 备案异常": "/icp",
-    "🔔 最近告警": "/alerts"
+    "🔔 最近告警": "/alerts",
+    "🔗 后台地址": "/admin",
+    "🖥 服务器性能": "/server"
   };
   return map[text] ?? map[command];
 }
@@ -343,6 +409,31 @@ async function buildRecentAlertsMessage() {
   return ["🔔 最近告警", ...rows.map((row) => `${formatDateTime(row.createdAt)} ${row.type} ${row.status}\n${row.target ?? ""}`)].join("\n\n");
 }
 
+function buildAdminAddressMessage() {
+  return ["🔗 后台地址", adminConsoleUrl].join("\n");
+}
+
+async function buildServerPerformanceMessage() {
+  const [load1, load5, load15] = os.loadavg();
+  const totalMemory = os.totalmem();
+  const freeMemory = os.freemem();
+  const usedMemory = totalMemory - freeMemory;
+  const disk = await statfs("/");
+  const totalDisk = disk.blocks * disk.bsize;
+  const freeDisk = disk.bavail * disk.bsize;
+  const usedDisk = totalDisk - freeDisk;
+
+  return [
+    "🖥 服务器性能",
+    `CPU 负载：${formatNumber(load1)} / ${formatNumber(load5)} / ${formatNumber(load15)}`,
+    `内存：${formatBytes(usedMemory)} / ${formatBytes(totalMemory)}（${formatPercent(usedMemory, totalMemory)}）`,
+    `磁盘 /：${formatBytes(usedDisk)} / ${formatBytes(totalDisk)}（${formatPercent(usedDisk, totalDisk)}）`,
+    `系统运行：${formatDuration(os.uptime())}`,
+    `监控进程：${formatDuration(process.uptime())}`,
+    `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai" })}`
+  ].join("\n");
+}
+
 function formatDate(value: Date | null) {
   return value ? value.toISOString().slice(0, 10) : "未知";
 }
@@ -353,6 +444,35 @@ function formatDateTime(value: Date) {
 
 function icpStatusText(status: string) {
   return ({ MISSING: "未备案", DROPPED: "备案掉了", ERROR: "查询错误" } as Record<string, string>)[status] ?? status;
+}
+
+function formatBytes(value: number) {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = value;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${formatNumber(size)} ${units[unitIndex]}`;
+}
+
+function formatPercent(used: number, total: number) {
+  return total > 0 ? `${formatNumber((used / total) * 100)}%` : "0%";
+}
+
+function formatNumber(value: number) {
+  return value.toFixed(1);
+}
+
+function formatDuration(seconds: number) {
+  const totalSeconds = Math.floor(seconds);
+  const days = Math.floor(totalSeconds / 86_400);
+  const hours = Math.floor((totalSeconds % 86_400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (days > 0) return `${days} 天 ${hours} 小时 ${minutes} 分钟`;
+  if (hours > 0) return `${hours} 小时 ${minutes} 分钟`;
+  return `${minutes} 分钟`;
 }
 
 export async function createAlert(params: {
