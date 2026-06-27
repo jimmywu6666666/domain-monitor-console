@@ -1,6 +1,7 @@
 import net from "node:net";
 import tls from "node:tls";
 import { prisma, getSettings, parseDays } from "./db.js";
+import { historyCutoff } from "./retention.js";
 import { createAlert, resetAlertBackoff } from "./telegram.js";
 
 export function statusMatches(statusCode: number, rule: string) {
@@ -389,9 +390,8 @@ function fetchSslCertificate(host: string, port: number) {
 }
 
 export async function cleanupMonitorResults() {
-  const cutoff = new Date(Date.now() - 86_400_000);
   return prisma.monitorResult.deleteMany({
-    where: { checkedAt: { lt: cutoff } }
+    where: { checkedAt: { lt: historyCutoff() } }
   });
 }
 

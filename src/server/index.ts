@@ -8,6 +8,7 @@ import { z } from "zod";
 import { registerAuth, requireAuth } from "./auth.js";
 import { queryIcpWithRetry, runExpirationCheck, runIcpCheck, runSslCheck, runUrlCheck } from "./checks.js";
 import { getSettings, prisma, updateSettings } from "./db.js";
+import { historyCutoff } from "./retention.js";
 import { startScheduler } from "./scheduler.js";
 import { sendTelegram } from "./telegram.js";
 
@@ -50,10 +51,11 @@ const icpTestSchema = z.object({
 
 app.get("/api/summary", async () => {
   const settings = await getSettings();
+  const cutoff = historyCutoff();
   const [domains, urls, activeAlerts, recentResults, recentAlerts] = await Promise.all([
     prisma.domain.count(),
     prisma.urlCheck.count(),
-    prisma.alertEvent.count({ where: { status: { in: ["SENT", "FAILED"] }, createdAt: { gte: new Date(Date.now() - 86_400_000) } } }),
+    prisma.alertEvent.count({ where: { status: { in: ["SENT", "FAILED"] }, createdAt: { gte: cutoff } } }),
     prisma.monitorResult.findMany({
       where: settings.icpGlobalEnabled ? { OR: [{ type: { not: "ICP" } }, { domain: { icpCheckEnabled: true } }] } : { type: { not: "ICP" } },
       orderBy: { checkedAt: "desc" },
@@ -61,7 +63,7 @@ app.get("/api/summary", async () => {
       include: { domain: true, urlCheck: true }
     }),
     prisma.alertEvent.findMany({
-      where: { createdAt: { gte: new Date(Date.now() - 86_400_000) } },
+      where: { createdAt: { gte: cutoff } },
       orderBy: { createdAt: "desc" },
       take: 8
     })
@@ -142,7 +144,7 @@ app.post("/api/checks/run", async (request) => {
 
 app.get("/api/results", async () => {
   const settings = await getSettings();
-  const cutoff = new Date(Date.now() - 86_400_000);
+  const cutoff = historyCutoff();
   return prisma.monitorResult.findMany({
     where: {
       checkedAt: { gte: cutoff },
@@ -156,7 +158,7 @@ app.get("/api/results", async () => {
 
 app.get("/api/alerts", async () => {
   return prisma.alertEvent.findMany({
-    where: { createdAt: { gte: new Date(Date.now() - 86_400_000) } },
+    where: { createdAt: { gte: historyCutoff() } },
     orderBy: { createdAt: "desc" },
     take: 200
   });

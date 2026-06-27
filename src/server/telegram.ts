@@ -1,6 +1,7 @@
 import { readFile, statfs } from "node:fs/promises";
 import os from "node:os";
 import { getSettings, prisma, type AppSettings } from "./db.js";
+import { historyCutoff } from "./retention.js";
 
 type TelegramUpdate = {
   update_id: number;
@@ -345,7 +346,7 @@ async function buildStatusMessage() {
     prisma.domain.count({ where: { expiresAt: { lte: new Date(Date.now() + 30 * 86_400_000), gte: new Date() } } }),
     prisma.urlCheck.count({ where: { sslStatus: { in: ["WARNING", "ERROR", "FAIL"] } } }),
     prisma.domain.count({ where: { icpCheckEnabled: true, icpStatus: { in: ["MISSING", "DROPPED", "ERROR"] } } }),
-    prisma.alertEvent.count({ where: { createdAt: { gte: new Date(Date.now() - 86_400_000) }, status: { in: ["SENT", "FAILED"] } } })
+    prisma.alertEvent.count({ where: { createdAt: { gte: historyCutoff() }, status: { in: ["SENT", "FAILED"] } } })
   ]);
   const icpIssues = settings.icpGlobalEnabled ? rawIcpIssues : 0;
 
@@ -357,7 +358,7 @@ async function buildStatusMessage() {
     `30 天内到期：${expiringDomains}`,
     `SSL 异常/即将到期：${sslIssues}`,
     `备案异常：${settings.icpGlobalEnabled ? icpIssues : "已关闭"}`,
-    `24 小时告警：${alertsToday}`
+    `7 天告警：${alertsToday}`
   ].join("\n");
 }
 
@@ -599,9 +600,8 @@ export function calculateAlertCooldownMinutes(baseMinutes: number, repeatCount: 
 }
 
 export async function cleanupAlertEvents() {
-  const cutoff = new Date(Date.now() - 86_400_000);
   return prisma.alertEvent.deleteMany({
-    where: { createdAt: { lt: cutoff } }
+    where: { createdAt: { lt: historyCutoff() } }
   });
 }
 
