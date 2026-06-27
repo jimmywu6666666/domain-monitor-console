@@ -1,4 +1,4 @@
-import { statfs } from "node:fs/promises";
+import { readFile, statfs } from "node:fs/promises";
 import os from "node:os";
 import { getSettings, prisma, type AppSettings } from "./db.js";
 
@@ -414,7 +414,7 @@ function buildAdminAddressMessage() {
 }
 
 async function buildServerPerformanceMessage() {
-  const [load1, load5, load15] = os.loadavg();
+  const cpuUsage = await getCpuUsagePercent();
   const totalMemory = os.totalmem();
   const freeMemory = os.freemem();
   const usedMemory = totalMemory - freeMemory;
@@ -425,13 +425,36 @@ async function buildServerPerformanceMessage() {
 
   return [
     "🖥 服务器性能",
-    `CPU 负载：${formatNumber(load1)} / ${formatNumber(load5)} / ${formatNumber(load15)}`,
+    `CPU 使用率：${cpuUsage === null ? "未知" : `${formatNumber(cpuUsage)}%`}`,
     `内存：${formatBytes(usedMemory)} / ${formatBytes(totalMemory)}（${formatPercent(usedMemory, totalMemory)}）`,
     `磁盘 /：${formatBytes(usedDisk)} / ${formatBytes(totalDisk)}（${formatPercent(usedDisk, totalDisk)}）`,
     `系统运行：${formatDuration(os.uptime())}`,
     `监控进程：${formatDuration(process.uptime())}`,
     `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai" })}`
   ].join("\n");
+}
+
+async function getCpuUsagePercent() {
+  try {
+    const first = await readCpuStat();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const second = await readCpuStat();
+    const idle = second.idle - first.idle;
+    const total = second.total - first.total;
+    if (total <= 0) return null;
+    return ((total - idle) / total) * 100;
+  } catch {
+    return null;
+  }
+}
+
+async function readCpuStat() {
+  const text = await readFile("/proc/stat", "utf8");
+  const line = text.split("\n")[0] ?? "";
+  const values = line.trim().split(/\s+/).slice(1).map(Number);
+  const idle = (values[3] ?? 0) + (values[4] ?? 0);
+  const total = values.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
+  return { idle, total };
 }
 
 function formatDate(value: Date | null) {
